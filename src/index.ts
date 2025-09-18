@@ -5,6 +5,7 @@ import morgan from 'morgan';
 import dotenv from 'dotenv';
 import routes from './routes';
 import MongoDB from './config/mongodb';
+import { logAllRequests } from './middleware/requestLogger';
 
 // Load environment variables
 dotenv.config();
@@ -33,6 +34,9 @@ app.use(morgan('combined'));
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Request logging middleware (must be after body parsing)
+app.use(logAllRequests);
 
 // API routes
 app.use('/api', routes);

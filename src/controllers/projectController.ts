@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { MongoService } from '../services/mongoService';
 import { AuthenticatedRequest } from '../middleware/auth';
+import { Logger } from '../utils/logger';
 import type {
   ProjectData,
   ProjectContext,
@@ -42,21 +43,49 @@ export class ProjectController {
       const { projectId } = req.params;
       const mongoService = getMongoService();
 
+      Logger.api('📂 Getting project context', req, undefined, {
+        projectId,
+        userId: req.user?.id,
+        hasProjectAttached: !!req.project,
+        hasOrganizationAttached: !!req.organization,
+        userOrgRole: req.organizationMembership?.role,
+        userProjectRole: req.projectMembership?.role,
+      });
+
+      Logger.db('💾 Fetching full project context from database', req, { projectId });
+
       // Project access is already validated by authorization middleware
       const context = await mongoService.getProjectContext(projectId);
       if (!context) {
+        Logger.api('❌ Project context not found', req, res, { projectId });
         return res.status(404).json({
           success: false,
           error: 'Project not found',
         });
       }
 
+      Logger.api('✅ Project context retrieved successfully', req, res, {
+        projectId: context.project._id,
+        projectName: context.project.name,
+        organizationId: context.organization._id,
+        organizationName: context.organization.name,
+        tasksCount: context.tasks.length,
+        columnsCount: context.columns.length,
+        agentsCount: context.agents.length,
+        membersCount: context.members.length,
+        projectVisibility: context.project.visibility,
+        userAccess: {
+          organizationRole: req.organizationMembership?.role,
+          projectRole: req.projectMembership?.role || 'viewer',
+        }
+      });
+
       res.json({
         success: true,
         data: context,
       });
     } catch (error) {
-      console.error('Get Project Context Error:', error);
+      Logger.error('💥 Get Project Context Error', req, error);
       res.status(500).json({
         success: false,
         error: 'Failed to get project context',
@@ -71,6 +100,13 @@ export class ProjectController {
       const userId = req.user?.id || 'default-user';
       const mongoService = getMongoService();
 
+      Logger.api('📂 Creating project', req, undefined, {
+        requestBody: req.body,
+        userId,
+        organizationId: createData.organizationId,
+        projectName: createData.name,
+      });
+
       const projectData = {
         ...createData,
         settings: {
@@ -79,17 +115,24 @@ export class ProjectController {
           tokenBudget: 10000,
           ...createData.settings,
         },
-        members: [{
-          userId,
-          role: 'owner' as const,
-          addedAt: new Date(),
-        }],
-        createdBy: userId,
-        isActive: true,
-        isArchived: false,
+        // Don't set members here - MongoService handles this with the createdBy parameter
+        // Don't set createdBy, isActive, isArchived - MongoService handles these
       };
 
-      const newProject = await mongoService.createProject(projectData);
+      Logger.db('💾 Creating project in database', req, {
+        projectName: projectData.name,
+        organizationId: projectData.organizationId,
+        ownerUserId: userId,
+        visibility: projectData.visibility,
+        settings: projectData.settings,
+      });
+
+      const newProject = await mongoService.createProject(projectData, userId);
+
+      Logger.db('📋 Creating default columns for project', req, {
+        projectId: newProject._id,
+        columnsToCreate: 4,
+      });
 
       // Create default columns for the project
       const defaultColumns = [
@@ -117,12 +160,21 @@ export class ProjectController {
         });
       }
 
+      Logger.api('✅ Project created successfully with default columns', req, res, {
+        projectId: newProject._id,
+        projectName: newProject.name,
+        organizationId: newProject.organizationId,
+        visibility: newProject.visibility,
+        membersCount: newProject.members.length,
+        columnsCreated: defaultColumns.length,
+      });
+
       res.status(201).json({
         success: true,
         data: newProject,
       });
     } catch (error) {
-      console.error('Create Project Error:', error);
+      Logger.error('💥 Create Project Error', req, error);
       res.status(500).json({
         success: false,
         error: 'Failed to create project',

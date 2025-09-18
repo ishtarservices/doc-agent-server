@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { MongoService } from '../services/mongoService';
 import { AuthenticatedRequest } from '../middleware/auth';
 import { AgentController } from './agentController';
+import { Logger } from '../utils/logger';
 import type {
   TaskData,
   CreateTaskRequest,
@@ -46,9 +47,28 @@ export class TaskController {
       const userId = req.user?.id || 'default-user';
       const mongoService = getMongoService();
 
+      Logger.api('📝 Creating task', req, undefined, {
+        requestBody: req.body,
+        userId,
+        projectId: createData.projectId,
+        columnId: createData.columnId,
+        taskTitle: createData.title,
+        taskType: createData.type,
+      });
+
       // Verify user has access to the project and column
+      Logger.db('🔍 Checking project access for task creation', req, {
+        projectId: createData.projectId,
+        userId,
+      });
+
       const hasProjectAccess = await mongoService.hasProjectAccess(createData.projectId, userId);
       if (!hasProjectAccess) {
+        Logger.api('❌ Project access denied for task creation', req, res, {
+          projectId: createData.projectId,
+          userId,
+          hasAccess: false,
+        });
         return res.status(403).json({
           success: false,
           error: 'Access denied: You do not have access to this project',
@@ -56,11 +76,25 @@ export class TaskController {
       }
 
       // Check if user can create tasks (editor or owner role)
+      Logger.db('🔍 Checking user role for task creation', req, { projectId: createData.projectId, userId });
       const project = await mongoService.getProject(createData.projectId);
       if (project) {
         const projectMembership = project.members.find(member => member.userId === userId);
         const userRole = projectMembership?.role || 'viewer';
+
+        Logger.api('👤 Checking task creation permissions', req, undefined, {
+          userId,
+          userRole,
+          projectMembership: !!projectMembership,
+          requiredRoles: ['owner', 'editor'],
+          hasPermission: ['owner', 'editor'].includes(userRole),
+        });
+
         if (!['owner', 'editor'].includes(userRole)) {
+          Logger.api('❌ Insufficient role for task creation', req, res, {
+            userRole,
+            requiredRoles: ['owner', 'editor'],
+          });
           return res.status(403).json({
             success: false,
             error: 'Access denied: Editor or owner role required to create tasks',

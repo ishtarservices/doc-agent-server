@@ -32,6 +32,8 @@ This is a TypeScript Express.js server for the Doc Agent Board application, feat
 - **Supabase Authentication**: JWT-based authentication middleware
 - **MCP Integration**: Model Context Protocol client for advanced MongoDB operations
 - **RESTful API**: Full REST endpoints following frontend API expectations
+- **Advanced Logging**: Comprehensive structured logging with request tracking and context
+- **Robust Authorization**: Multi-level authorization with organization, project, and resource-specific access control
 
 ## API Endpoint Structure
 
@@ -44,6 +46,7 @@ This is a TypeScript Express.js server for the Doc Agent Board application, feat
 
 ### Key Endpoints
 - `GET /api/health` - Server health check with full endpoint list
+- `GET /api/user/organizations` - Get organizations accessible to current user
 - `GET /api/projects/:projectId/context` - Full project context (org, project, tasks, columns, agents)
 - `POST /api/ai/assistant` - Process AI requests with full context
 - `POST /api/tasks/:taskId/assign-agent` - Assign AI agent to task
@@ -62,12 +65,13 @@ This is a TypeScript Express.js server for the Doc Agent Board application, feat
 - `src/controllers/aiController.ts` - AI request processing and entity creation
 
 ### Database Services
-- `src/services/mongoService.ts` - Complete MongoDB operations for all entities
+- `src/services/mongoService.ts` - Complete MongoDB operations for all entities (884 lines)
 - `src/services/taskService.ts` - Legacy Supabase operations (minimal usage)
 - `src/services/mcpClient.ts` - MCP protocol client for advanced queries
 - `src/services/claudeService.ts` - Claude AI client integration
 
 ### Route Structure
+- `src/routes/index.ts` - Main router with health check and endpoint listing
 - `src/routes/organizations.ts` - Organization routes + nested project/agent endpoints
 - `src/routes/projects.ts` - Project routes + context endpoint
 - `src/routes/agents.ts` - Agent CRUD operations
@@ -76,12 +80,21 @@ This is a TypeScript Express.js server for the Doc Agent Board application, feat
 - `src/routes/ai.ts` - AI assistant processing
 - `src/routes/init.ts` - Development/demo endpoints (no auth required)
 
+### Security & Logging
+- `src/middleware/auth.ts` - Supabase JWT authentication middleware
+- `src/middleware/authorization.ts` - Multi-level authorization middleware for organizations/projects/resources
+- `src/middleware/requestLogger.ts` - Comprehensive request/response logging with context
+- `src/utils/logger.ts` - Structured logging utility with different log levels (INFO, WARN, ERROR, AUTH, AUTHZ, API, DB)
+- `src/utils/authorization.ts` - Authorization utility functions and access checks
+
 ### Data Models
-Complete type system in `src/types/index.ts`:
+Complete type system in `src/types/index.ts` (627 lines):
 - **Core Data Interfaces**: `OrganizationData`, `ProjectData`, `AgentData`, `TaskData`, `ColumnData`
 - **MongoDB Documents**: `OrganizationDocument`, `ProjectDocument`, etc. with ObjectId fields
 - **Request/Response Types**: `CreateTaskRequest`, `UpdateTaskRequest`, `ApiResponse<T>`, etc.
 - **Special Types**: `ProjectContext` (full project data), `AIRequest`, `AIResponse`
+- **Authorization Types**: Extended request interfaces with user, organization, project context
+- **Legacy Types**: Compatibility interfaces for Supabase integration
 
 ### Agent System
 - Agents have `type`, `model`, `systemPrompt`, and `capabilities`
@@ -114,12 +127,22 @@ MongoDB collections with comprehensive schemas:
 - All routes use consistent `ApiResponse<T>` format
 - TypeScript strict mode with complete type coverage
 
-## Authentication Flow
+## Authentication & Authorization Flow
 
+### Authentication (src/middleware/auth.ts)
 1. Frontend sends Supabase JWT in `Authorization: Bearer <token>` header
-2. `authenticateUser` middleware validates token and attaches user to request
+2. `authenticateUser` middleware validates token with Supabase and attaches user to request
 3. Most routes require authentication except `/api/init/*` and `/api/health`
 4. User information available as `req.user` in `AuthenticatedRequest`
+5. All authentication events are logged with structured logging
+
+### Authorization (src/middleware/authorization.ts)
+1. **Organization Access**: `requireOrganizationAccess()` - Checks user membership and roles
+2. **Project Access**: `requireProjectAccess()` - Validates organization + project permissions
+3. **Resource Access**: `requireTaskAccess()`, `requireColumnAccess()`, `requireAgentAccess()`
+4. **Role Hierarchy**: viewer < member < editor < admin < owner
+5. **Visibility Levels**: public (open), team (org members), private (explicit members only)
+6. **Context Enrichment**: Adds organization, project, task objects to request for downstream use
 
 ## Agent Execution Flow
 
@@ -127,6 +150,37 @@ MongoDB collections with comprehensive schemas:
 2. Agent can be executed via `POST /api/tasks/:taskId/run-agent`
 3. Column auto-run: moving task to column with `autoRun: true` triggers agent
 4. Execution results stored in task's `agentHistory` with tokens used and output
+
+## Logging Architecture
+
+### Structured Logging (src/utils/logger.ts)
+- **Request Tracking**: Unique request IDs for tracing requests across middleware
+- **Contextual Information**: User ID, IP, method, URL, timestamps automatically included
+- **Log Levels**: INFO (🌐), WARN (⚠️), ERROR (🚨), AUTH (🔐), AUTHZ (🛡️), API (🌐), DB (💾)
+- **JSON Format**: Structured logging for easy parsing and analysis
+- **Error Details**: Stack traces and error metadata for debugging
+
+### Request Logging (src/middleware/requestLogger.ts)
+- **Full Request Lifecycle**: Logs incoming requests and outgoing responses
+- **Performance Tracking**: Request duration measurement
+- **Response Analysis**: Status codes, response types, success/failure tracking
+- **Body Inspection**: Request/response body analysis with size tracking
+- **Security Headers**: Authorization header logging (truncated for security)
+
+## Server Configuration
+
+### Application Setup (src/index.ts)
+- **Express Configuration**: Security headers, CORS, body parsing (10MB limit)
+- **Middleware Stack**: Morgan HTTP logging + custom request logger + auth middleware
+- **Database Integration**: MongoDB singleton connection with graceful shutdown
+- **Error Handling**: Global error middleware with development/production modes
+- **Health Monitoring**: Startup logging with service status reporting
+
+### Environment Configuration
+- **CORS Support**: Configurable allowed origins for cross-domain requests
+- **Security**: Helmet middleware for security headers
+- **Development Features**: tsx watch mode, detailed error messages
+- **Production Ready**: Compiled TypeScript, sanitized error responses
 
 ## MCP Integration
 

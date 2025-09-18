@@ -297,6 +297,9 @@ ssl/
 # MCP server files (if generated locally)
 mcp-server/
 
+# MCP configuration with connection strings
+mcp-config.json
+
 # Uploads directory (if it exists)
 uploads/
 

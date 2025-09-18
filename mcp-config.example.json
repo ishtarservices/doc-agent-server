@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "mongodb": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@mongodb-js/mongodb-mcp-server@latest"
+      ],
+      "env": {
+        "MDB_MCP_CONNECTION_STRING": "your-mongodb-connection-string",
+        "MDB_MCP_DEFAULT_DB": "your-database-name"
+      }
+    }
+  }
+}

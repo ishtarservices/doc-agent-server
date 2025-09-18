@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { MongoService } from '../services/mongoService';
 import { AuthenticatedRequest } from '../middleware/auth';
+import { Logger } from '../utils/logger';
 import type {
   OrganizationData,
   CreateOrganizationRequest,
@@ -38,6 +39,11 @@ export class OrganizationController {
 
   static async createOrganization(req: AuthenticatedRequest, res: Response<ApiResponse<OrganizationData>>) {
     try {
+      Logger.api('🏢 Creating organization', req, undefined, {
+        requestBody: req.body,
+        userId: req.user?.id,
+      });
+
       const createData: CreateOrganizationRequest = req.body;
       const userId = req.user?.id || 'default-user';
       const mongoService = getMongoService();
@@ -59,14 +65,28 @@ export class OrganizationController {
         isActive: true,
       };
 
+      Logger.db('💾 Creating organization in database', req, {
+        organizationName: organizationData.name,
+        organizationSlug: organizationData.slug,
+        ownerUserId: userId,
+        settings: organizationData.settings,
+      });
+
       const newOrganization = await mongoService.createOrganization(organizationData, userId);
+
+      Logger.api('✅ Organization created successfully', req, res, {
+        organizationId: newOrganization._id,
+        organizationName: newOrganization.name,
+        organizationSlug: newOrganization.slug,
+        membersCount: newOrganization.members.length,
+      });
 
       res.status(201).json({
         success: true,
         data: newOrganization,
       });
     } catch (error) {
-      console.error('Create Organization Error:', error);
+      Logger.error('💥 Create Organization Error', req, error);
       res.status(500).json({
         success: false,
         error: 'Failed to create organization',
@@ -187,21 +207,38 @@ export class OrganizationController {
       const userId = req.user?.id;
       const mongoService = getMongoService();
 
+      Logger.api('👤 Getting organizations for user', req, undefined, {
+        userId,
+        hasUser: !!req.user,
+      });
+
       if (!userId) {
+        Logger.api('❌ User not authenticated for organizations list', req);
         return res.status(401).json({
           success: false,
           error: 'User not authenticated',
         });
       }
 
+      Logger.db('💾 Fetching user organizations from database', req, { userId });
       const organizations = await mongoService.getOrganizationsByUser(userId);
+
+      Logger.api('✅ User organizations retrieved', req, res, {
+        organizationCount: organizations.length,
+        organizationIds: organizations.map(org => org._id),
+        organizationNames: organizations.map(org => org.name),
+        userRoles: organizations.map(org => {
+          const membership = org.members.find(m => m.userId === userId);
+          return { orgId: org._id, role: membership?.role };
+        }),
+      });
 
       res.json({
         success: true,
         data: organizations,
       });
     } catch (error) {
-      console.error('Get User Organizations Error:', error);
+      Logger.error('💥 Get User Organizations Error', req, error);
       res.status(500).json({
         success: false,
         error: 'Failed to get user organizations',

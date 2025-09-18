@@ -280,10 +280,11 @@ export class MongoService {
       organizationId: data.organizationId,
       name: data.name,
       description: data.description,
-      settings: data.settings || {
+      settings: {
         autoRunEnabled: false,
         aiModel: 'claude-3-5-sonnet',
-        tokenBudget: 10000
+        tokenBudget: 10000,
+        ...data.settings
       },
       visibility: data.visibility || 'team',
       members: [{
@@ -489,12 +490,13 @@ export class MongoService {
       logo: data.logo,
       model: data.model,
       systemPrompt: data.systemPrompt,
-      settings: data.settings || {
+      settings: {
         maxTokens: 4000,
         temperature: 0.3,
         autoRun: false,
         retryAttempts: 2,
-        timeout: 30
+        timeout: 30,
+        ...data.settings,
       },
       capabilities: data.capabilities || [],
       organizationId: data.organizationId,
@@ -605,11 +607,12 @@ export class MongoService {
       description: data.description,
       color: data.color || '#6b7280',
       position,
-      settings: data.settings || {
+      settings: {
         isCollapsed: false,
         isPinned: false,
         autoRun: false,
-        taskLimit: 50
+        taskLimit: 50,
+        ...data.settings,
       },
       visibility: data.visibility || 'public',
       createdBy,
