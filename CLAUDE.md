@@ -66,7 +66,6 @@ This is a TypeScript Express.js server for the Doc Agent Board application, feat
 
 ### Database Services
 - `src/services/mongoService.ts` - Complete MongoDB operations for all entities (884 lines)
-- `src/services/taskService.ts` - Legacy Supabase operations (minimal usage)
 - `src/services/mcpClient.ts` - MCP protocol client for advanced queries
 - `src/services/claudeService.ts` - Claude AI client integration
 

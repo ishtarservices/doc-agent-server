@@ -7,8 +7,7 @@
         "@mongodb-js/mongodb-mcp-server@latest"
       ],
       "env": {
-        "MDB_MCP_CONNECTION_STRING": "mongodb+srv://isaacm00101_db_user:T2Whle0VRE21tHnf@cluster0.ydtwgmx.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0",
-        "MDB_MCP_DEFAULT_DB": "doc_agent_board"
+        "MONGODB_URI": "mongodb+srv://isaacm00101_db_user:T2Whle0VRE21tHnf@cluster0.ydtwgmx.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
       }
     }
   }

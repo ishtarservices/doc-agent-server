@@ -1,0 +1,26 @@
+# Coral Server v1 Agent Registry
+# This file defines all available agents for the coral server
+
+[[local-agent]]
+path = "agents/Coral-Interface-Agent"
+
+[[local-agent]]
+path = "agents/Coral-Unified-Debug-Agent"
+
+[[local-agent]]
+path = "agents/coral-agent-converter"
+
+[[local-agent]]
+path = "agents/Coral-BugLocator-Agent"
+
+[[local-agent]]
+path = "agents/Coral-CodeDiffReview-Agent"
+
+[[local-agent]]
+path = "agents/Coral-Debug-Orchestrator-Agent"
+
+[[local-agent]]
+path = "agents/Coral-Economics-Agent"
+
+[[local-agent]]
+path = "agents/Coral-FirecrawlMCP-Agent"

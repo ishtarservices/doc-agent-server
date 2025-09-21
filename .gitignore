@@ -75,9 +75,8 @@ build/
 *.js.map
 *.d.ts.map
 
-# TypeScript declaration files (if generated)
-types/
-
+# Ignore generated TypeScript declaration files, but not the source files
+types/**/*.d.ts
 # ============================================================================
 # Environment Variables & Configuration
 # ============================================================================

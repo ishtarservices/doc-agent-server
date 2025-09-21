@@ -40,7 +40,7 @@ export class Logger {
       data,
       timestamp: new Date().toISOString(),
     };
-    console.log('📝 INFO:', JSON.stringify(logData, null, 2));
+    // console.log('📝 INFO:', JSON.stringify(logData, null, 2));
   }
 
   static warn(message: string, req?: Request | AuthenticatedRequest, data?: any) {
@@ -86,7 +86,7 @@ export class Logger {
       },
       timestamp: new Date().toISOString(),
     };
-    console.log('🔐 AUTH:', JSON.stringify(logData, null, 2));
+    // console.log('🔐 AUTH:', JSON.stringify(logData, null, 2));
   }
 
   static authz(message: string, req: AuthenticatedRequest, data?: any) {
@@ -111,7 +111,7 @@ export class Logger {
       },
       timestamp: new Date().toISOString(),
     };
-    console.log('🛡️ AUTHZ:', JSON.stringify(logData, null, 2));
+    // console.log('🛡️ AUTHZ:', JSON.stringify(logData, null, 2));
   }
 
   static api(message: string, req: Request | AuthenticatedRequest, res?: Response, data?: any) {
@@ -141,6 +141,6 @@ export class Logger {
       data,
       timestamp: new Date().toISOString(),
     };
-    console.log('💾 DB:', JSON.stringify(logData, null, 2));
+    // console.log('💾 DB:', JSON.stringify(logData, null, 2));
   }
 }
