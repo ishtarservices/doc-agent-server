@@ -1,19 +1,19 @@
-// Optimized Claude Service - src/services/claudeService.ts
+// OpenAI Service - src/services/openaiService.ts
 
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import type {
   AIRequest,
   AIResponse,
   AITool,
   AIToolContext,
-  ClaudeResponse,
-  ClaudeToolCall
+  OpenAIResponse,
+  OpenAIToolCall
 } from '../types/ai';
 import type { AIToolsService } from './aiTools';
 import { Logger } from '../utils/logger';
 
-// Interface for Claude service request (simplified from AIRequest) - backward compatibility
-interface ClaudeServiceRequest {
+// Interface for OpenAI service request (simplified from AIRequest) - backward compatibility
+interface OpenAIServiceRequest {
   input: string;
   currentTasks: any[];
   currentColumns: any[];
@@ -22,18 +22,18 @@ interface ClaudeServiceRequest {
 }
 
 // Validate environment variables
-if (!process.env.CLAUDE_API_KEY) {
-  throw new Error('CLAUDE_API_KEY environment variable is required');
+if (!process.env.OPENAI_API_KEY) {
+  throw new Error('OPENAI_API_KEY environment variable is required');
 }
 
-export class ClaudeService {
-  private client: Anthropic;
-  private model: string = 'claude-3-5-sonnet-20241022';
+export class OpenAIService {
+  private client: OpenAI;
+  private model: string = 'gpt-4o-2024-08-06'; // Best model for function calling based on research
   private aiToolsService: AIToolsService | null = null;
 
   constructor() {
-    this.client = new Anthropic({
-      apiKey: process.env.CLAUDE_API_KEY!,
+    this.client = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY!,
     });
   }
 
@@ -50,10 +50,10 @@ export class ClaudeService {
     request: AIRequest,
     availableTools: AITool[],
     toolContext: AIToolContext
-  ): Promise<ClaudeResponse> {
+  ): Promise<OpenAIResponse> {
     const startTime = Date.now();
 
-    Logger.info('🤖 Starting Claude API request', undefined, {
+    Logger.info('🤖 Starting OpenAI API request', undefined, {
       projectId: request.projectId,
       userId: request.userId,
       inputLength: request.input.length,
@@ -62,11 +62,14 @@ export class ClaudeService {
     });
 
     try {
-      // Convert our AITool format to Anthropic's tool format
-      const anthropicTools = availableTools.map(tool => ({
-        name: tool.name,
-        description: tool.description,
-        input_schema: tool.parameters
+      // Convert our AITool format to OpenAI's function format
+      const openaiTools = availableTools.map(tool => ({
+        type: 'function' as const,
+        function: {
+          name: tool.name,
+          description: tool.description,
+          parameters: tool.parameters
+        }
       }));
 
       // Build system message with context
@@ -75,32 +78,36 @@ export class ClaudeService {
       // Format user message with attachments if any
       const userMessage = this.formatUserMessage(request.input, request.attachments);
 
-      const messageParams: any = {
+      const messages = [
+        { role: 'system' as const, content: systemMessage },
+        userMessage
+      ];
+
+      const completionParams: any = {
         model: this.model,
+        messages,
         max_tokens: request.options?.maxTokens || 4000,
         temperature: request.options?.temperature || 0.3,
-        system: systemMessage,
-        messages: [userMessage]
       };
 
       // Add tools if available
-      if (anthropicTools.length > 0) {
-        messageParams.tools = anthropicTools;
-        messageParams.tool_choice = { type: "auto" };
+      if (openaiTools.length > 0) {
+        completionParams.tools = openaiTools;
+        completionParams.tool_choice = 'auto';
       }
 
-      const response = await this.client.messages.create(messageParams);
+      const response = await this.client.chat.completions.create(completionParams);
 
-      Logger.info('🤖 Claude API response received', undefined, {
-        inputTokens: response.usage.input_tokens,
-        outputTokens: response.usage.output_tokens,
-        totalTokens: response.usage.input_tokens + response.usage.output_tokens,
+      Logger.info('🤖 OpenAI API response received', undefined, {
+        inputTokens: response.usage?.prompt_tokens || 0,
+        outputTokens: response.usage?.completion_tokens || 0,
+        totalTokens: response.usage?.total_tokens || 0,
         responseTime: Date.now() - startTime,
-        hasToolCalls: response.content.some((c: any) => c.type === 'tool_use')
+        hasToolCalls: (response.choices[0]?.message?.tool_calls?.length || 0) > 0
       });
 
       // Parse the response and execute tools if needed
-      const result = await this.parseClaudeResponse(response, toolContext);
+      const result = await this.parseOpenAIResponse(response, toolContext);
 
       if (result.toolCalls && result.toolCalls.length > 0) {
         Logger.info('🛠️ Tools executed', undefined, {
@@ -111,40 +118,44 @@ export class ClaudeService {
 
       return {
         message: result.message,
-        tokensUsed: response.usage.input_tokens + response.usage.output_tokens,
+        tokensUsed: response.usage?.total_tokens || 0,
         toolCalls: result.toolCalls,
         suggestions: result.suggestions
       };
 
     } catch (error) {
-      Logger.error('🚨 Claude API error', undefined, error, {
+      Logger.error('🚨 OpenAI API error', undefined, error, {
         projectId: request.projectId,
         userId: request.userId,
         responseTime: Date.now() - startTime,
         errorType: error instanceof Error ? error.name : 'Unknown'
       });
-      throw error instanceof Error ? error : new Error('Failed to process request with Claude');
+      throw error instanceof Error ? error : new Error('Failed to process request with OpenAI');
     }
   }
 
-  public async processConversation(request: AIRequest): Promise<ClaudeResponse> {
+  public async processConversation(request: AIRequest): Promise<OpenAIResponse> {
     try {
       const systemMessage = this.buildConversationalSystemMessage(request);
       const userMessage = this.formatUserMessage(request.input, request.attachments);
 
-      const response = await this.client.messages.create({
+      const messages = [
+        { role: 'system' as const, content: systemMessage },
+        userMessage
+      ];
+
+      const response = await this.client.chat.completions.create({
         model: this.model,
+        messages,
         max_tokens: request.options?.maxTokens || 2000,
         temperature: request.options?.temperature || 0.7,
-        system: systemMessage,
-        messages: [userMessage]
       });
 
-      const result = await this.parseClaudeResponse(response);
+      const result = await this.parseOpenAIResponse(response);
 
       return {
         message: result.message,
-        tokensUsed: response.usage.input_tokens + response.usage.output_tokens,
+        tokensUsed: response.usage?.total_tokens || 0,
         suggestions: this.generateSuggestions(request)
       };
 
@@ -157,7 +168,7 @@ export class ClaudeService {
   // BACKWARD COMPATIBILITY METHOD
   // ============================================================================
 
-  public async processAIRequest(request: ClaudeServiceRequest): Promise<AIResponse> {
+  public async processAIRequest(request: OpenAIServiceRequest): Promise<AIResponse> {
     try {
       const { input, projectId, userId, currentTasks = [], currentColumns = [] } = request;
 
@@ -181,17 +192,17 @@ export class ClaudeService {
       };
 
       // Use conversational processing for backward compatibility
-      const claudeResponse = await this.processConversation(fullRequest);
+      const openaiResponse = await this.processConversation(fullRequest);
 
       // Try to parse message as structured response for backward compatibility
       try {
-        const structuredResponse = JSON.parse(claudeResponse.message);
+        const structuredResponse = JSON.parse(openaiResponse.message);
         const validTypes = ['general_answer', 'task_creation', 'task_management', 'agent_assignment', 'project_management', 'agent_use', 'other', 'error'];
 
         if (structuredResponse.type && validTypes.includes(structuredResponse.type)) {
           return {
             ...structuredResponse,
-            tokensUsed: claudeResponse.tokensUsed,
+            tokensUsed: openaiResponse.tokensUsed,
             executionTime: 0
           };
         }
@@ -201,10 +212,10 @@ export class ClaudeService {
 
       return {
         type: 'general_answer',
-        message: claudeResponse.message,
-        tokensUsed: claudeResponse.tokensUsed,
+        message: openaiResponse.message,
+        tokensUsed: openaiResponse.tokensUsed,
         executionTime: 0,
-        suggestions: claudeResponse.suggestions
+        suggestions: openaiResponse.suggestions
       };
 
     } catch (error) {
@@ -284,11 +295,9 @@ Be helpful, concise, and actionable in your responses. Reference the current pro
       for (const attachment of attachments) {
         if (attachment.type === 'image' && attachment.content) {
           messageContent.push({
-            type: "image",
-            source: {
-              type: "base64",
-              media_type: attachment.mimeType,
-              data: attachment.content
+            type: "image_url",
+            image_url: {
+              url: `data:${attachment.mimeType};base64,${attachment.content}`
             }
           });
         }
@@ -297,7 +306,7 @@ Be helpful, concise, and actionable in your responses. Reference the current pro
 
     return {
       role: "user" as const,
-      content: messageContent
+      content: messageContent.length === 1 ? content : messageContent
     };
   }
 
@@ -305,36 +314,62 @@ Be helpful, concise, and actionable in your responses. Reference the current pro
   // RESPONSE PARSING
   // ============================================================================
 
-  private async parseClaudeResponse(response: any, toolContext?: AIToolContext): Promise<{ message: string; toolCalls?: ClaudeToolCall[]; suggestions?: string[] }> {
+  private async parseOpenAIResponse(response: any, toolContext?: AIToolContext): Promise<{ message: string; toolCalls?: OpenAIToolCall[]; suggestions?: string[] }> {
     let message = '';
-    const toolCalls: ClaudeToolCall[] = [];
+    const toolCalls: OpenAIToolCall[] = [];
 
-    // Parse content blocks
-    for (const content of response.content) {
-      if (content.type === 'text') {
-        message += content.text;
-      } else if (content.type === 'tool_use') {
-        toolCalls.push({
-          name: content.name,
-          parameters: content.input
-        });
+    const choice = response.choices[0];
+    if (!choice) {
+      throw new Error('No response choices received from OpenAI');
+    }
 
-        // Execute tool if we have the tools service and context
-        if (this.aiToolsService && toolContext) {
+    const responseMessage = choice.message;
+
+    // Get text content
+    if (responseMessage.content) {
+      message += responseMessage.content;
+    }
+
+    // Handle tool calls
+    if (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
+      for (const toolCall of responseMessage.tool_calls) {
+        if (toolCall.type === 'function') {
+          const functionCall = toolCall.function;
+          let parameters;
+
           try {
-            const toolResult = await this.aiToolsService.executeTool(
-              content.name,
-              content.input,
-              toolContext
-            );
-
-            if (toolResult.success) {
-              message += `\n\n✅ Successfully executed ${content.name}: ${JSON.stringify(toolResult.data)}`;
-            } else {
-              message += `\n\n❌ Failed to execute ${content.name}: ${toolResult.error}`;
-            }
+            parameters = JSON.parse(functionCall.arguments);
           } catch (error) {
-            message += `\n\n❌ Error executing ${content.name}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+            Logger.warn('Failed to parse tool call arguments', undefined, {
+              toolName: functionCall.name,
+              arguments: functionCall.arguments,
+              error: error instanceof Error ? error.message : 'Unknown error'
+            });
+            continue;
+          }
+
+          toolCalls.push({
+            name: functionCall.name,
+            parameters
+          });
+
+          // Execute tool if we have the tools service and context
+          if (this.aiToolsService && toolContext) {
+            try {
+              const toolResult = await this.aiToolsService.executeTool(
+                functionCall.name,
+                parameters,
+                toolContext
+              );
+
+              if (toolResult.success) {
+                message += `\n\n✅ Successfully executed ${functionCall.name}: ${JSON.stringify(toolResult.data)}`;
+              } else {
+                message += `\n\n❌ Failed to execute ${functionCall.name}: ${toolResult.error}`;
+              }
+            } catch (error) {
+              message += `\n\n❌ Error executing ${functionCall.name}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+            }
           }
         }
       }

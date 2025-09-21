@@ -116,11 +116,11 @@ export class TaskController {
         ...createData,
         priority: createData.priority || 'medium',
         status: createData.status || 'backlog',
-        agentHistory: createData.assignedAgent ? [{
-          agentId: createData.assignedAgent,
+        agentHistory: createData.agents && createData.agents.length > 0 ? createData.agents.map(agent => ({
+          agentId: agent.agentId,
           assignedAt: new Date(),
           assignedBy: userId,
-        }] : [],
+        })) : [],
         tokenEstimate: createData.tokenEstimate || 500,
         actualTokensUsed: 0,
         progressPercentage: 0,
@@ -134,7 +134,7 @@ export class TaskController {
         createdBy: userId,
       };
 
-      const newTask = await mongoService.createTask(taskData);
+      const newTask = await mongoService.createTask(taskData, userId);
 
       res.status(201).json({
         success: true,
@@ -306,7 +306,7 @@ export class TaskController {
               agentId: column.settings.autoRunAgent,
               options: {}
             },
-          };
+          } as unknown as AuthenticatedRequest;
 
           // Execute agent (this will be async but we don't wait for it)
           setTimeout(() => {
@@ -333,7 +333,7 @@ export class TaskController {
 
   static async assignAgent(req: AuthenticatedRequest, res: Response<ApiResponse<TaskData>>) {
     // Delegate to AgentController
-    return AgentController.assignAgent(req, res);
+    return AgentController.assignAgentsToTask(req, res);
   }
 
   static async runAgent(req: AuthenticatedRequest, res: Response<ApiResponse<TaskData>>) {

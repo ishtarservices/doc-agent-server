@@ -46,7 +46,6 @@ server/
 │   │   └── init.ts             # Development/demo endpoints (no auth required)
 │   ├── services/           # Business logic and external integrations
 │   │   ├── mongoService.ts     # Complete MongoDB operations for all entities (884 lines)
-│   │   ├── taskService.ts      # Legacy Supabase operations (minimal usage)
 │   │   ├── claudeService.ts    # Claude AI integration
 │   │   └── mcpClient.ts        # MCP protocol client for advanced queries
 │   ├── utils/              # Utility functions and helpers

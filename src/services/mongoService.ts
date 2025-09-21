@@ -109,7 +109,7 @@ export class MongoService {
       type: doc.type,
       status: doc.status,
       priority: doc.priority,
-      assignedAgent: doc.assignedAgent,
+      agents: doc.agents || [],
       agentHistory: doc.agentHistory,
       tokenEstimate: doc.tokenEstimate,
       actualTokensUsed: doc.actualTokensUsed,
@@ -448,6 +448,13 @@ export class MongoService {
       this.getAgentsByOrganization(project.organizationId),
     ]);
 
+    // Group tasks by column
+    const columnsWithTasks = columns.map(column => ({
+      ...column,
+      tasks: tasks.filter(task => task.columnId === column._id)
+        .sort((a, b) => a.position - b.position)
+    }));
+
     // Get actual project members - for now returning organization members
     // TODO: Implement user service to get actual user details
     const members = organization.members.map(member => ({
@@ -460,8 +467,8 @@ export class MongoService {
     return {
       organization,
       project,
-      tasks,
-      columns,
+      tasks,  // Keep flat array for backward compatibility
+      columns: columnsWithTasks,  // Enhanced columns with tasks
       agents,
       members,
     };
@@ -725,12 +732,12 @@ export class MongoService {
       type: data.type,
       status: data.status || 'backlog',
       priority: data.priority || 'medium',
-      assignedAgent: data.assignedAgent,
-      agentHistory: data.assignedAgent ? [{
-        agentId: data.assignedAgent,
+      agents: data.agents || [],
+      agentHistory: data.agents && data.agents.length > 0 ? data.agents.map(agent => ({
+        agentId: agent.agentId,
         assignedAt: now,
         assignedBy: createdBy
-      }] : [],
+      })) : [],
       tokenEstimate: data.tokenEstimate || 0,
       actualTokensUsed: 0,
       progressPercentage: 0,
@@ -784,17 +791,10 @@ export class MongoService {
     };
 
     // Handle agent assignment change
-    if (updates.assignedAgent) {
-      const currentTask = await this.getTask(taskId);
-      if (currentTask && updates.assignedAgent !== currentTask.assignedAgent) {
-        updateDoc.$push = {
-          agentHistory: {
-            agentId: updates.assignedAgent,
-            assignedAt: new Date(),
-            assignedBy: 'current_user' // TODO: Pass as parameter
-          }
-        };
-      }
+    if (updates.agents) {
+      // Agent history is typically handled in the controller when agents are assigned
+      // but we can also handle direct updates here if needed
+      updateDoc.agents = updates.agents;
     }
 
     const result = await this.db.collection('tasks').findOneAndUpdate(

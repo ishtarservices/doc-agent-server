@@ -156,8 +156,7 @@ export class ProjectController {
             taskLimit: 50,
           },
           visibility: 'public',
-          createdBy: userId,
-        });
+        }, userId);
       }
 
       Logger.api('✅ Project created successfully with default columns', req, res, {
@@ -295,11 +294,11 @@ export class ProjectController {
       const mongoService = getMongoService();
 
       // Project access is already validated by authorization middleware
-      let tasks;
+      let tasks = await mongoService.getTasksByProject(projectId);
+
+      // Filter by status if provided
       if (status) {
-        tasks = await mongoService.getTasksByProjectAndStatus(projectId, status as string);
-      } else {
-        tasks = await mongoService.getTasksByProject(projectId);
+        tasks = tasks.filter(task => task.status === status);
       }
 
       res.json({

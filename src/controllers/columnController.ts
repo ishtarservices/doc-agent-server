@@ -78,7 +78,7 @@ export class ColumnController {
         createdBy: userId,
       };
 
-      const newColumn = await mongoService.createColumn(columnData);
+      const newColumn = await mongoService.createColumn(columnData, userId);
 
       res.status(201).json({
         success: true,
